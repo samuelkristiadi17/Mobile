@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Plus } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import type { FoodItem } from "./FoodMenu";
 
 interface AddMenuDialogProps {
@@ -88,7 +88,7 @@ export function AddMenuDialog({ onAddMenu }: AddMenuDialogProps) {
             <Label htmlFor="category">Kategori</Label>
             <Select
               value={formData.category}
-              onValueChange={(value) => setFormData({ ...formData, category: value })}
+              onValueChange={(value: string) => setFormData({ ...formData, category: value })}
             >
               <SelectTrigger>
                 <SelectValue />

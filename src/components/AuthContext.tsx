@@ -1,258 +1,161 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 
-export type UserRole = "admin" | "staff";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+  TwitterAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
+
+import { auth } from "../firebase";
+
+// ===== ROLE LIST =====
+const ADMIN_EMAIL = "admin@foodkasir.com";
+
+const STAFF_EMAILS = [
+  "staff@foodkasir.com",
+  "staff1@foodkasir.com",
+]; // <-- add staff emails here
 
 export interface User {
-  id: string;
-  username: string;
-  role: UserRole;
-  name: string;
-  email?: string;
-  avatar?: string;
+  uid: string;
+  email: string;
+  role: "admin" | "staff" | "user";
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  loginWithSocial: (provider: string, token: string) => Promise<boolean>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
+  loginWithFacebook: () => Promise<boolean>;
+  loginWithTwitter: () => Promise<boolean>;
+  logout: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Configuration - Switch between mock and real API
-const USE_MOCK_DATA = true; // Set to false when using real API
-const API_BASE_URL = "http://localhost:3001/api"; // Change to your backend URL
-
-// Mock users - for development only
-const MOCK_USERS: Array<User & { password: string }> = [
-  {
-    id: "1",
-    username: "admin",
-    password: "admin123",
-    name: "Administrator",
-    email: "admin@foodkasir.com",
-    role: "admin",
-  },
-  {
-    id: "2",
-    username: "kasir1",
-    password: "kasir123",
-    name: "Kasir Satu",
-    email: "kasir1@foodkasir.com",
-    role: "staff",
-  },
-  {
-    id: "3",
-    username: "kasir2",
-    password: "kasir123",
-    name: "Kasir Dua",
-    email: "kasir2@foodkasir.com",
-    role: "staff",
-  },
-];
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Check for saved session
-    const checkAuth = async () => {
-      const token = localStorage.getItem("foodkasir_token");
-      const savedUser = localStorage.getItem("foodkasir_user");
+  // ROLE LOGIC
+  const mapUser = (fb: FirebaseUser | null): User | null => {
+    if (!fb) return null;
 
-      if (token && savedUser) {
-        try {
-          if (USE_MOCK_DATA) {
-            // Mock: Just restore from localStorage
-            const parsedUser = JSON.parse(savedUser);
-            setUser(parsedUser);
-          } else {
-            // Real API: Verify token with backend
-            const response = await fetch(`${API_BASE_URL}/auth/verify`, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-            });
+    let role: "admin" | "staff" | "user" = "user";
 
-            if (response.ok) {
-              const data = await response.json();
-              setUser(data.user);
-            } else {
-              // Token invalid, clear storage
-              localStorage.removeItem("foodkasir_token");
-              localStorage.removeItem("foodkasir_user");
-            }
-          }
-        } catch (error) {
-          console.error("Auth check error:", error);
-          localStorage.removeItem("foodkasir_token");
-          localStorage.removeItem("foodkasir_user");
-        }
-      }
-      setIsLoading(false);
+    if (fb.email === ADMIN_EMAIL) {
+      role = "admin";
+    } else if (fb.email && STAFF_EMAILS.includes(fb.email)) {
+      role = "staff";
+    } else {
+      role = "user";
+    }
+
+    return {
+      uid: fb.uid,
+      email: fb.email ?? "",
+      role,
     };
+  };
 
-    checkAuth();
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (fbUser) => {
+      setUser(mapUser(fbUser));
+      setIsLoading(false);
+    });
+
+    return () => unsub();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    setError(null);
-    setIsLoading(true);
-
+  const login = async (email: string, password: string) => {
     try {
-      if (USE_MOCK_DATA) {
-        // Mock login
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
-        
-        const foundUser = MOCK_USERS.find(
-          (u) => u.username === username && u.password === password
-        );
-
-        if (foundUser) {
-          const userWithoutPassword: User = {
-            id: foundUser.id,
-            username: foundUser.username,
-            name: foundUser.name,
-            email: foundUser.email,
-            role: foundUser.role,
-            avatar: foundUser.avatar,
-          };
-          
-          setUser(userWithoutPassword);
-          localStorage.setItem("foodkasir_user", JSON.stringify(userWithoutPassword));
-          localStorage.setItem("foodkasir_token", "mock-token-" + Date.now());
-          setIsLoading(false);
-          return true;
-        }
-
-        setError("Username atau password salah");
-        setIsLoading(false);
-        return false;
-      } else {
-        // Real API login
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ username, password }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setUser(data.user);
-          localStorage.setItem("foodkasir_user", JSON.stringify(data.user));
-          localStorage.setItem("foodkasir_token", data.token);
-          setIsLoading(false);
-          return true;
-        } else {
-          setError(data.message || "Login gagal");
-          setIsLoading(false);
-          return false;
-        }
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setError("Terjadi kesalahan saat login");
-      setIsLoading(false);
+      await signInWithEmailAndPassword(auth, email, password);
+      return true;
+    } catch {
+      setError("Login gagal");
       return false;
     }
   };
 
-  const loginWithSocial = async (provider: string, token: string): Promise<boolean> => {
-    setError(null);
-    setIsLoading(true);
-
+  const register = async (email: string, password: string) => {
     try {
-      if (USE_MOCK_DATA) {
-        // Mock social login
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const mockSocialUser: User = {
-          id: "social-" + Date.now(),
-          username: `${provider.toLowerCase()}_user`,
-          name: `${provider} User`,
-          email: `user@${provider.toLowerCase()}.com`,
-          role: "staff",
-        };
-
-        setUser(mockSocialUser);
-        localStorage.setItem("foodkasir_user", JSON.stringify(mockSocialUser));
-        localStorage.setItem("foodkasir_token", "mock-social-token-" + Date.now());
-        setIsLoading(false);
-        return true;
-      } else {
-        // Real API social login
-        const response = await fetch(`${API_BASE_URL}/auth/social/${provider.toLowerCase()}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ token }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setUser(data.user);
-          localStorage.setItem("foodkasir_user", JSON.stringify(data.user));
-          localStorage.setItem("foodkasir_token", data.token);
-          setIsLoading(false);
-          return true;
-        } else {
-          setError(data.message || "Social login gagal");
-          setIsLoading(false);
-          return false;
-        }
-      }
-    } catch (error) {
-      console.error("Social login error:", error);
-      setError("Terjadi kesalahan saat social login");
-      setIsLoading(false);
+      await createUserWithEmailAndPassword(auth, email, password);
+      return true;
+    } catch {
+      setError("Registrasi gagal");
       return false;
     }
   };
 
-  const logout = () => {
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const loginWithFacebook = async () => {
+    try {
+      await signInWithPopup(auth, new FacebookAuthProvider());
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const loginWithTwitter = async () => {
+    try {
+      await signInWithPopup(auth, new TwitterAuthProvider());
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
-    setError(null);
-    localStorage.removeItem("foodkasir_user");
-    localStorage.removeItem("foodkasir_token");
-    
-    // Optional: Call backend logout endpoint
-    if (!USE_MOCK_DATA) {
-      const token = localStorage.getItem("foodkasir_token");
-      if (token) {
-        fetch(`${API_BASE_URL}/auth/logout`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }).catch(err => console.error("Logout error:", err));
-      }
-    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithSocial, logout, isLoading, error }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        register,
+        loginWithGoogle,
+        loginWithFacebook,
+        loginWithTwitter,
+        logout,
+        isLoading,
+        error,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

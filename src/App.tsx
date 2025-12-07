@@ -6,11 +6,12 @@ import { FloatingCartButton } from "./components/FloatingCartButton";
 import { SalesHistory, type Transaction } from "./components/SalesHistory";
 import { AddMenuDialog } from "./components/AddMenuDialog";
 import { UtensilsCrossed, Receipt, BarChart3, LogOut, User } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { AuthProvider, useAuth } from "./components/AuthContext";
 import { Login } from "./components/Login";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
+import { PaymentDialog } from "./components/PaymentDialog";
 
 const INITIAL_FOOD_ITEMS: FoodItem[] = [
   {
@@ -118,7 +119,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "13",
+    id: "14",
     name: "Es Teh Manis",
     price: 5000,
     category: "Minuman",
@@ -126,7 +127,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "14",
+    id: "15",
     name: "Jus Jeruk",
     price: 12000,
     category: "Minuman",
@@ -134,7 +135,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "15",
+    id: "16",
     name: "Kopi",
     price: 10000,
     category: "Minuman",
@@ -142,7 +143,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "16",
+    id: "17",
     name: "Teh Tarik",
     price: 8000,
     category: "Minuman",
@@ -150,7 +151,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "17",
+    id: "18",
     name: "Jus Alpukat",
     price: 15000,
     category: "Minuman",
@@ -158,7 +159,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "18",
+    id: "19",
     name: "Jus Mangga",
     price: 13000,
     category: "Minuman",
@@ -166,7 +167,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "19",
+    id: "20",
     name: "Es Lemon Tea",
     price: 8000,
     category: "Minuman",
@@ -174,7 +175,7 @@ const INITIAL_FOOD_ITEMS: FoodItem[] = [
     available: true,
   },
   {
-    id: "20",
+    id: "21",
     name: "Cappuccino",
     price: 18000,
     category: "Minuman",
@@ -188,6 +189,7 @@ function DashboardContent() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false); // TAMBAHAN: State untuk payment dialog
   const { user, logout } = useAuth();
 
   const handleAddToCart = (item: FoodItem) => {
@@ -223,7 +225,17 @@ function DashboardContent() {
     toast.info("Item dihapus dari keranjang");
   };
 
+  // UPDATE: Fungsi handleCheckout untuk membuka payment dialog
   const handleCheckout = () => {
+    if (cartItems.length === 0) return;
+    
+    // Tutup cart drawer dan buka payment dialog
+    setCartOpen(false);
+    setPaymentOpen(true);
+  };
+
+  // TAMBAHAN: Fungsi untuk menyelesaikan pembayaran
+  const handlePaymentComplete = () => {
     if (cartItems.length === 0) return;
 
     const now = new Date();
@@ -247,7 +259,6 @@ function DashboardContent() {
 
     setTransactions(prev => [newTransaction, ...prev]);
     setCartItems([]);
-    setCartOpen(false);
     toast.success(`Transaksi berhasil! Total: Rp ${total.toLocaleString('id-ID')}`);
   };
 
@@ -294,7 +305,7 @@ function DashboardContent() {
                 <User className="h-4 w-4" />
                 <div className="text-sm">
                   <div className="text-orange-50 opacity-75">
-                    {user?.name}
+                    {user?.email ?? "User"}
                   </div>
                   <Badge 
                     variant="secondary" 
@@ -366,14 +377,31 @@ function DashboardContent() {
         open={cartOpen}
         onOpenChange={setCartOpen}
       />
+
+      {/* TAMBAHAN: Payment Dialog Component */}
+      <PaymentDialog
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        items={cartItems}
+        onPaymentComplete={handlePaymentComplete}
+      />
     </div>
   );
 }
 
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Register } from "./components/Register";
+
 export default function App() {
   return (
     <AuthProvider>
-      <AppWithAuth />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/*" element={<AppWithAuth />} />
+        </Routes>
+      </BrowserRouter>
     </AuthProvider>
   );
 }
@@ -393,7 +421,7 @@ function AppWithAuth() {
       </div>
     );
   }
-
+ 
   if (!user) {
     return <Login />;
   }
